@@ -181,12 +181,11 @@ export const SimulationDashboard: React.FC<SimulationDashboardProps> = ({ scenar
     };
 
     const toggleTask = (taskId: string) => {
-        // Just for visual tracking on the client side, doesn't impact simulation logic yet unless we send it
         const newTasks = scenario.maintenanceTasks?.map(t => 
             t.id === taskId ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t
         );
-        // We do a shallow update here just for the UI state
         onUpdateScenario({ ...scenario, maintenanceTasks: newTasks as any });
+        // Optional: Could trigger simulation here if we want the AI to validate the step
     };
 
     const systems = Array.from(new Set(scenario.controls.map(c => c.system)));

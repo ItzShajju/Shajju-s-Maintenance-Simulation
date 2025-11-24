@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React from 'react';
-import { WrenchScrewdriverIcon, AcademicCapIcon, BoltIcon } from '@heroicons/react/24/outline';
+import { AcademicCapIcon, BoltIcon } from '@heroicons/react/24/outline';
 
 export const Hero: React.FC = () => {
   return (
@@ -30,12 +30,7 @@ export const Hero: React.FC = () => {
           Experience high-fidelity scenarios for B737NG, B747-8, B777, and B787 in a risk-free environment.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto mt-12 text-left">
-             <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-cyan-500/50 transition-colors group">
-                <WrenchScrewdriverIcon className="w-6 h-6 text-cyan-500 mb-3 group-hover:scale-110 transition-transform" />
-                <h3 className="text-zinc-200 font-semibold mb-1">Interactive Systems</h3>
-                <p className="text-zinc-500 text-sm">Full touch-screen simulation of cockpit panels and schematics.</p>
-             </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto mt-12 text-left">
              <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-cyan-500/50 transition-colors group">
                 <BoltIcon className="w-6 h-6 text-cyan-500 mb-3 group-hover:scale-110 transition-transform" />
                 <h3 className="text-zinc-200 font-semibold mb-1">Real-time Feedback</h3>

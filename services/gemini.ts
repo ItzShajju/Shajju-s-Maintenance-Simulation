@@ -50,36 +50,85 @@ When asked, generate a JSON object representing the initial state of a cockpit o
 The controls should be realistic and use Boeing terminology (e.g., "DISCONNECT", "STBY PWR", "L PACK", "GND CALL").
 
 Types: 
-- 'switch' (boolean: true=ON, false=OFF). IMPORTANT: Switches usually default to false (OFF) or true (AUTO/ON) depending on normal state.
-- 'button' (boolean: true=PRESSED)
-- 'indicator' (string: 'OFF', 'GREEN', 'AMBER', 'RED', 'WHITE', 'BLUE'). Boeing often uses Amber for caution, Red for warning.
-- 'gauge' (number: value)
-- 'knob' (string: position)
+- 'switch' (boolean: true=ON/AUTO, false=OFF).
+- 'button' (boolean: true=PRESSED).
+- 'indicator' (string: 'OFF', 'GREEN', 'AMBER', 'RED', 'WHITE', 'BLUE').
+- 'gauge' (number: value).
+- 'knob' (string: position).
 
-Ensure the 'logs' array contains the initial EICAS messages corresponding to the fault.
-Generate a list of 'maintenanceTasks' that correspond to the AMM (Aircraft Maintenance Manual) procedure to fix the fault.
-Generate 'techData' which provides a brief technical description of the system or the specific AMM reference text.
+Requirements:
+1. 'logs': Initial EICAS messages for the fault.
+2. 'maintenanceTasks': A logical list of AMM (Aircraft Maintenance Manual) steps to diagnose/fix the fault.
+3. 'techData': Brief technical description or AMM reference text.
+4. 'controls': 10-15 relevant controls.
 `;
 
 const SIMULATE_STEP_SYSTEM_PROMPT = `You are a High-Fidelity Boeing Aircraft System Simulator. 
-You receive the current state of the cockpit controls and the last user action.
-Calculate the new state of the aircraft systems (indicators, gauges, logs) based on real-world Boeing aircraft logic.
+You receive the current state of the cockpit controls, the checklist status, and the last user action.
+Calculate the new state of the aircraft systems based on real-world Boeing aircraft logic.
 
 Rules:
-1. Simulate realistic system latency.
-2. Gauges should reflect pressure/temp changes physically (e.g. if pump off, pressure drops to 0 or accumulator pressure).
-3. Indicators should follow 'Dark Cockpit' philosophy where applicable.
-4. Provide technical feedback in the 'feedback' field describing the physical system response.
+1. Simulate realistic system latency (e.g., APU start time, valve transit).
+2. Gauges must reflect physical changes (pressure, temp, volts).
+3. Indicators must follow 'Dark Cockpit' philosophy.
+4. Provide technical feedback in 'feedback' field explaining the system response.
+5. CRITICAL: Do NOT change the 'id', 'label', or 'type' of existing controls. Only update 'value'.
+6. CRITICAL: Preserve the 'status' of maintenanceTasks unless the user's action explicitly contradicts the completion of a task (e.g. they turned off a system required for the task).
+7. If the fault is cleared, update status to 'resolved'.
 
-Return the updated state including controls, logs, and status.
-If the user solved the problem (e.g., turned on the pump, reset the generator), update the status to 'resolved'.
-If they made it worse, set status to 'critical'.
+Return the fully updated state object.
 `;
+
+const RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    scenarioTitle: { type: Type.STRING },
+    aircraft: { type: Type.STRING },
+    description: { type: Type.STRING },
+    status: { type: Type.STRING, enum: ['active', 'resolved', 'critical'] },
+    feedback: { type: Type.STRING },
+    logs: { type: Type.ARRAY, items: { type: Type.STRING } },
+    maintenanceTasks: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          description: { type: Type.STRING },
+          status: { type: Type.STRING, enum: ['pending', 'completed', 'skipped'] }
+        }
+      }
+    },
+    techData: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        content: { type: Type.STRING }
+      }
+    },
+    controls: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          label: { type: Type.STRING },
+          type: { type: Type.STRING, enum: ['switch', 'button', 'indicator', 'gauge', 'knob'] },
+          value: { type: Type.STRING }, // passing as string to simplify schema, cast later
+          system: { type: Type.STRING },
+          description: { type: Type.STRING },
+          unit: { type: Type.STRING }
+        },
+        required: ['id', 'label', 'type', 'value', 'system']
+      }
+    }
+  },
+  required: ['scenarioTitle', 'aircraft', 'description', 'controls', 'status', 'logs', 'maintenanceTasks', 'techData']
+};
 
 export async function generateScenario(topic: string, aircraft: string): Promise<SimulationState> {
   const prompt = `Create a training scenario for Boeing ${aircraft} involving: ${topic}. 
-  Include at least 10-14 relevant controls (switches, indicators, gauges) across relevant systems.
-  Make sure there is a fault or a task to complete.
+  Include at least 10-14 relevant controls across affected systems.
   Response must be valid JSON matching the SimulationState interface.`;
 
   try {
@@ -89,65 +138,12 @@ export async function generateScenario(topic: string, aircraft: string): Promise
       config: {
         systemInstruction: GENERATE_SCENARIO_SYSTEM_PROMPT,
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            scenarioTitle: { type: Type.STRING },
-            aircraft: { type: Type.STRING },
-            description: { type: Type.STRING },
-            status: { type: Type.STRING, enum: ['active', 'resolved', 'critical'] },
-            logs: { type: Type.ARRAY, items: { type: Type.STRING } },
-            maintenanceTasks: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  status: { type: Type.STRING, enum: ['pending', 'completed', 'skipped'] }
-                }
-              }
-            },
-            techData: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                content: { type: Type.STRING }
-              }
-            },
-            controls: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  label: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ['switch', 'button', 'indicator', 'gauge', 'knob'] },
-                  value: { type: Type.STRING }, // passing as string to simplify schema
-                  system: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  unit: { type: Type.STRING }
-                },
-                required: ['id', 'label', 'type', 'value', 'system']
-              }
-            }
-          },
-          required: ['scenarioTitle', 'aircraft', 'description', 'controls', 'status', 'logs', 'maintenanceTasks', 'techData']
-        }
+        responseSchema: RESPONSE_SCHEMA
       }
     });
 
     const json = JSON.parse(response.text || "{}");
-    
-    // Post-process values
-    json.controls = json.controls.map((c: any) => ({
-        ...c,
-        value: c.type === 'switch' || c.type === 'button' ? (c.value === 'true' || c.value === true) 
-             : c.type === 'gauge' ? Number(c.value) 
-             : c.value
-    }));
-
-    return json;
+    return postProcessState(json);
   } catch (error) {
     console.error("Scenario Generation Error:", error);
     throw error;
@@ -155,7 +151,13 @@ export async function generateScenario(topic: string, aircraft: string): Promise
 }
 
 export async function simulateStep(currentState: SimulationState, actionDescription: string): Promise<SimulationState> {
-  const prompt = `Current State: ${JSON.stringify(currentState)}. 
+  // We strip out feedback to save tokens/confusion, but keep the rest
+  const statePayload = {
+      ...currentState,
+      feedback: undefined 
+  };
+  
+  const prompt = `Current State: ${JSON.stringify(statePayload)}. 
   User Action: ${actionDescription}.
   Update the state based on aircraft logic.`;
 
@@ -166,63 +168,26 @@ export async function simulateStep(currentState: SimulationState, actionDescript
       config: {
         systemInstruction: SIMULATE_STEP_SYSTEM_PROMPT,
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            scenarioTitle: { type: Type.STRING },
-            aircraft: { type: Type.STRING },
-            description: { type: Type.STRING },
-            status: { type: Type.STRING, enum: ['active', 'resolved', 'critical'] },
-            feedback: { type: Type.STRING },
-            logs: { type: Type.ARRAY, items: { type: Type.STRING } },
-            maintenanceTasks: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    status: { type: Type.STRING, enum: ['pending', 'completed', 'skipped'] }
-                  }
-                }
-              },
-              techData: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  content: { type: Type.STRING }
-                }
-              },
-            controls: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  label: { type: Type.STRING },
-                  type: { type: Type.STRING },
-                  value: { type: Type.STRING },
-                  system: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  unit: { type: Type.STRING }
-                }
-              }
-            }
-          }
-        }
+        responseSchema: RESPONSE_SCHEMA
       }
     });
     
     const json = JSON.parse(response.text || "{}");
-     json.controls = json.controls.map((c: any) => ({
-        ...c,
-        value: c.type === 'switch' || c.type === 'button' ? (c.value === 'true' || c.value === true) 
-             : c.type === 'gauge' ? Number(c.value) 
-             : c.value
-    }));
-    return json;
+    return postProcessState(json);
   } catch (error) {
     console.error("Simulation Step Error:", error);
     throw error;
   }
+}
+
+function postProcessState(json: any): SimulationState {
+    if (json.controls) {
+        json.controls = json.controls.map((c: any) => ({
+            ...c,
+            value: c.type === 'switch' || c.type === 'button' ? (String(c.value).toLowerCase() === 'true') 
+                 : c.type === 'gauge' ? Number(c.value) 
+                 : c.value
+        }));
+    }
+    return json as SimulationState;
 }
