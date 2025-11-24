@@ -7,11 +7,14 @@ import { Hero } from './components/Hero';
 import { InputArea } from './components/InputArea';
 import { SimulationDashboard } from './components/SimulationDashboard';
 import { CreationHistory } from './components/CreationHistory';
+import { UserGuide } from './components/UserGuide';
 import { generateScenario, SimulationState } from './services/gemini';
+import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
   const [activeScenario, setActiveScenario] = useState<SimulationState | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const [history, setHistory] = useState<any[]>([]); // simplified history
 
   const handleGenerate = async (topic: string, aircraft: string) => {
@@ -60,8 +63,17 @@ const App: React.FC = () => {
                 <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center font-bold text-black text-xl">S</div>
                 <span className="font-bold text-xl tracking-tight text-white">SHAJJU <span className="text-zinc-500 font-normal">SIMULATION</span></span>
             </div>
-            <div className="text-xs font-mono text-zinc-500">
-                V2.1.0 • CONNECTED
+            <div className="flex items-center space-x-4">
+                <button 
+                    onClick={() => setShowGuide(true)}
+                    className="flex items-center space-x-1 text-xs font-medium text-zinc-400 hover:text-cyan-400 transition-colors"
+                >
+                    <QuestionMarkCircleIcon className="w-5 h-5" />
+                    <span className="hidden sm:inline">USER GUIDE</span>
+                </button>
+                <div className="text-xs font-mono text-zinc-500 border-l border-zinc-800 pl-4">
+                    V2.1.0 • CONNECTED
+                </div>
             </div>
         </div>
 
@@ -76,6 +88,9 @@ const App: React.FC = () => {
             <CreationHistory history={history} onSelect={handleRestore} />
         </div>
       </div>
+
+      {/* User Guide Modal */}
+      <UserGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
 
       {/* Full Screen Simulator Modal */}
       {activeScenario && (
